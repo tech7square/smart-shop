@@ -6,11 +6,9 @@
 
 ## Steps to run the Project
 
-1. Step 1: Download the Project
- `npm install`
+1. Step 1: Download the Project - `npm install`
 
-2. Step 2: Open second terminal, change terminal to frontend folder, then run the below command
- `npm install`
+2. Step 2: Open second terminal, change terminal to frontend folder, then run the below command - `npm install`
 
 3. Step 3: Inside the first terminal (inside the backend), run the command - `npm run dev`
 
