@@ -1,12 +1,19 @@
 import express from "express";
-const app = express();
 import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
+import path from "path";
+import { fileURLToPath } from "url";
 import { connectDatabase } from "./config/dbConnect.js";
 import errorMiddleware from "./middlewares/errors.js";
 
-import path from "path";
-// import { fileURLToPath } from "url";
+// Import all routes
+import productRoutes from "./routes/products.js";
+import authRoutes from "./routes/auth.js";
+import orderRoutes from "./routes/order.js";
+import paymentRoutes from "./routes/payment.js";
+
+const app = express();
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -33,13 +40,6 @@ app.use(
   })
 );
 app.use(cookieParser());
-
-// Import all routes
-import productRoutes from "./routes/products.js";
-import authRoutes from "./routes/auth.js";
-import orderRoutes from "./routes/order.js";
-import paymentRoutes from "./routes/payment.js";
-import { fileURLToPath } from "url";
 
 app.use("/api/v1", productRoutes);
 app.use("/api/v1", authRoutes);

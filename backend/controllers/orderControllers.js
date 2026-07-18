@@ -98,6 +98,14 @@ export const updateOrder = catchAsyncErrors(async (req, res, next) => {
     );
   }
 
+  if (order?.paymentMethod === "COD" && req.body.status === "Delivered") {
+    if (!order.paymentInfo) {
+      order.paymentInfo = {};
+    }
+    order.paymentInfo.status = "paid";
+    order.paidAt = Date.now();
+  }
+
   order.orderStatus = req.body.status;
   order.deliveredAt = Date.now();
 

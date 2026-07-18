@@ -2,7 +2,13 @@ import catchAsyncErrors from "../middlewares/catchAsyncErrors.js";
 import Order from "../models/order.js";
 
 import Stripe from "stripe";
-const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
+let _stripe;
+const getStripe = () => {
+  if (!_stripe) {
+    _stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+  }
+  return _stripe;
+};
 
 // Create stripe checkout session   =>  /api/v1/payment/checkout_session
 export const stripeCheckoutSession = catchAsyncErrors(
@@ -10,7 +16,7 @@ export const stripeCheckoutSession = catchAsyncErrors(
     const body = req?.body;
 
     const line_items = body?.orderItems?.map((item) => {
-      return {
+      const itemData = {
         price_data: {
           currency: "usd",
           product_data: {
@@ -20,19 +26,19 @@ export const stripeCheckoutSession = catchAsyncErrors(
           },
           unit_amount: item?.price * 100,
         },
-        tax_rates: ["txr_1LlBSDA7jBHqn8SB8z4waAin"],
         quantity: item?.quantity,
       };
+
+      if (process.env.STRIPE_TAX_RATE) {
+        itemData.tax_rates = [process.env.STRIPE_TAX_RATE];
+      }
+
+      return itemData;
     });
 
     const shippingInfo = body?.shippingInfo;
 
-    const shipping_rate =
-      body?.itemsPrice >= 200
-        ? "shr_1LlBW5A7jBHqn8SBG2fsAWwT"
-        : "shr_1NQYwEA7jBHqn8SBs5alau8k";
-
-    const session = await stripe.checkout.sessions.create({
+    const sessionConfig = {
       payment_method_types: ["card"],
       success_url: `${process.env.FRONTEND_URL}/me/orders?order_success=true`,
       cancel_url: `${process.env.FRONTEND_URL}`,
@@ -40,13 +46,23 @@ export const stripeCheckoutSession = catchAsyncErrors(
       client_reference_id: req?.user?._id?.toString(),
       mode: "payment",
       metadata: { ...shippingInfo, itemsPrice: body?.itemsPrice },
-      shipping_options: [
+      line_items,
+    };
+
+    const shipping_rate =
+      body?.itemsPrice >= 200
+        ? process.env.STRIPE_SHIPPING_RATE_FREE
+        : process.env.STRIPE_SHIPPING_RATE_PAID;
+
+    if (shipping_rate) {
+      sessionConfig.shipping_options = [
         {
           shipping_rate,
         },
-      ],
-      line_items,
-    });
+      ];
+    }
+
+    const session = await getStripe().checkout.sessions.create(sessionConfig);
 
     res.status(200).json({
       url: session.url,
@@ -59,7 +75,7 @@ const getOrderItems = async (line_items) => {
     let cartItems = [];
 
     line_items?.data?.forEach(async (item) => {
-      const product = await stripe.products.retrieve(item.price.product);
+      const product = await getStripe().products.retrieve(item.price.product);
       const productId = product.metadata.productId;
 
       cartItems.push({
@@ -82,7 +98,7 @@ export const stripeWebhook = catchAsyncErrors(async (req, res, next) => {
   try {
     const signature = req.headers["stripe-signature"];
 
-    const event = stripe.webhooks.constructEvent(
+    const event = getStripe().webhooks.constructEvent(
       req.rawBody,
       signature,
       process.env.STRIPE_WEBHOOK_SECRET
@@ -91,7 +107,7 @@ export const stripeWebhook = catchAsyncErrors(async (req, res, next) => {
     if (event.type === "checkout.session.completed") {
       const session = event.data.object;
 
-      const line_items = await stripe.checkout.sessions.listLineItems(
+      const line_items = await getStripe().checkout.sessions.listLineItems(
         session.id
       );
 
@@ -126,6 +142,7 @@ export const stripeWebhook = catchAsyncErrors(async (req, res, next) => {
         paymentInfo,
         paymentMethod: "Card",
         user,
+        paidAt: Date.now(),
       };
 
       await Order.create(orderData);
